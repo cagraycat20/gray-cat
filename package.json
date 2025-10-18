@@ -1,0 +1,32 @@
+{
+  "name": "gray-cat-2.0",
+  "version": "1.0.0",
+  "description": "Gray Cat 2.0",
+  "main": "index.js",
+  "scripts": {
+    "build": "nx run-many -t build",
+    "lint": "eslint .",
+    "format": "prettier -w .",
+    "format:check": "prettier -c .",
+    "web:dev": "pnpm --filter web-ui dev",
+    "web:build": "pnpm --filter web-ui build",
+    "cdk:bootstrap": "pnpm --filter infra cdk bootstrap",
+    "cdk:diff": "pnpm --filter infra cdk diff",
+    "cdk:deploy": "pnpm --filter infra cdk deploy"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.18.3",
+  "devDependencies": {
+    "@types/node": "^24.8.1",
+    "@typescript-eslint/eslint-plugin": "^8.46.1",
+    "@typescript-eslint/parser": "^8.46.1",
+    "eslint": "^9.38.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-unused-imports": "^4.2.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3"
+  }
+}
