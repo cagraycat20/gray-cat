@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
-import { InfraStack } from '../lib/infra-stack';
+import { BackendStack } from '../stacks/backend/stack';
+import { WebUiStack } from '../stacks/web-ui/stack';
 
 const app = new cdk.App();
-new InfraStack(app, 'InfraStack');
+
+new BackendStack(app, 'BackendStack');
+
+new WebUiStack(app, 'WebUiStack');
