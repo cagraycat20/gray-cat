@@ -6,15 +6,17 @@ import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 import * as path from 'path';
+import { GC_CONFIG } from 'stacks/shared/config';
 import { GcEnvironment } from 'stacks/shared/environments';
-import { BACKEND_CONFIG } from './config';
 
 enum ApiRoute {
-  GetProducts = 'get-products',
-  GetUserData = 'get-user-data',
-  Sync = 'sync',
+  UserSettings = 'userSettings',
+  Products = 'products',
+  ImageSearch = 'imageSearch',
+  Days = 'days',
 }
 
 export class BackendStack extends Stack {
@@ -22,26 +24,55 @@ export class BackendStack extends Stack {
     super(scope, id, props);
 
     const removalPolicy =
-      BACKEND_CONFIG.ENVIRONMENT === GcEnvironment.Prod
-        ? RemovalPolicy.RETAIN
-        : RemovalPolicy.DESTROY;
+      GC_CONFIG.ENVIRONMENT === GcEnvironment.Prod ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY;
 
     /* ----------------------- DynamoDB tables ----------------------- */
 
     const productTable = new dynamodb.Table(this, 'ProductsTable', {
       tableName: getTableName('products'),
-      partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING },
+      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'id', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy,
     });
 
-    const userDataTable = new dynamodb.Table(this, 'UserDataTable', {
-      tableName: getTableName('user-data'),
-      partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING },
+    const daysTable = new dynamodb.Table(this, 'DaysTable', {
+      tableName: getTableName('days'),
+      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'date', type: dynamodb.AttributeType.NUMBER },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy,
+    });
+
+    const usersTable = new dynamodb.Table(this, 'UsersTable', {
+      tableName: getTableName('users'),
+      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy,
+    });
+
+    const systemTable = new dynamodb.Table(this, 'SystemTable', {
+      tableName: getTableName('system'),
+      partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy,
+    });
+
+    /* ----------------------- Buckets ----------------------- */
+
+    const mediaBucket = new s3.Bucket(this, 'MediaBucket', {
+      bucketName: GC_CONFIG.MEDIA_BUCKET_NAME,
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
+
+    const userContentBucket = new s3.Bucket(this, 'UserContentS3Bucket', {
+      bucketName: GC_CONFIG.USER_CONTENT_BUCKET_NAME,
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
+
+    const assetsBucket = new s3.Bucket(this, 'assetsS3Bucket', {
+      bucketName: GC_CONFIG.ASSETS_BUCKET_NAME,
+      removalPolicy: RemovalPolicy.RETAIN,
     });
 
     /* ----------------------- Cognito ----------------------- */
@@ -62,14 +93,10 @@ export class BackendStack extends Stack {
 
     /* ----------------------- Lambdas ----------------------- */
 
-    const getProductsLambda = getLambda(this, 'getProducts');
-    const getUserDataLambda = getLambda(this, 'getUserData');
-    const syncChangesLambda = getLambda(this, 'syncChanges');
-
-    productTable.grantReadWriteData(getProductsLambda);
-    productTable.grantReadWriteData(syncChangesLambda);
-    userDataTable.grantReadData(getUserDataLambda);
-    userDataTable.grantReadWriteData(syncChangesLambda);
+    const userSettingsLambda = getLambda(this, 'user-settings-lambda');
+    const productsLambda = getLambda(this, 'products-lambda');
+    const imageSearchLambda = getLambda(this, 'image-search-lambda');
+    const daysLambda = getLambda(this, 'days-lambda');
 
     /* ----------------------- HTTP API + Auth ----------------------- */
 
@@ -80,6 +107,8 @@ export class BackendStack extends Stack {
         allowMethods: [
           apigwv2.CorsHttpMethod.GET,
           apigwv2.CorsHttpMethod.POST,
+          apigwv2.CorsHttpMethod.PUT,
+          apigwv2.CorsHttpMethod.DELETE,
           apigwv2.CorsHttpMethod.OPTIONS,
         ],
         allowOrigins: ['*'], // TODO: tighten for prod
@@ -92,32 +121,36 @@ export class BackendStack extends Stack {
     });
 
     httpApi.addRoutes({
-      path: `/${ApiRoute.GetUserData}`,
-      methods: [apigwv2.HttpMethod.GET],
-      integration: new integrations.HttpLambdaIntegration(
-        'GetUserDataIntegration',
-        getUserDataLambda,
-      ),
-      authorizer,
-    });
-
-    httpApi.addRoutes({
-      path: `/${ApiRoute.GetProducts}`,
-      methods: [apigwv2.HttpMethod.GET],
-      integration: new integrations.HttpLambdaIntegration(
-        'GetProductsIntegration',
-        getProductsLambda,
-      ),
-      authorizer,
-    });
-
-    httpApi.addRoutes({
-      path: `/${ApiRoute.Sync}`,
+      path: `/${ApiRoute.UserSettings}`,
       methods: [apigwv2.HttpMethod.POST],
       integration: new integrations.HttpLambdaIntegration(
-        'SyncChangesIntegration',
-        syncChangesLambda,
+        'GetUserSettingsIntegration',
+        userSettingsLambda,
       ),
+      authorizer,
+    });
+
+    httpApi.addRoutes({
+      path: `/${ApiRoute.Products}`,
+      methods: [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.POST, apigwv2.HttpMethod.DELETE],
+      integration: new integrations.HttpLambdaIntegration('ProductsIntegration', productsLambda),
+      authorizer,
+    });
+
+    httpApi.addRoutes({
+      path: `/${ApiRoute.ImageSearch}`,
+      methods: [apigwv2.HttpMethod.GET],
+      integration: new integrations.HttpLambdaIntegration(
+        'ImageSearchIntegration',
+        imageSearchLambda,
+      ),
+      authorizer,
+    });
+
+    httpApi.addRoutes({
+      path: `/${ApiRoute.Days}`,
+      methods: [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.PUT],
+      integration: new integrations.HttpLambdaIntegration('DaysIntegration', daysLambda),
       authorizer,
     });
 
@@ -126,18 +159,16 @@ export class BackendStack extends Stack {
     new CfnOutput(this, 'HttpApiUrl', { value: httpApi.apiEndpoint });
     new CfnOutput(this, 'UserPoolId', { value: userPool.userPoolId });
     new CfnOutput(this, 'UserPoolClientId', { value: userPoolClient.userPoolClientId });
-    new CfnOutput(this, 'DataTableName', { value: productTable.tableName });
-    new CfnOutput(this, 'MetaTableName', { value: userDataTable.tableName });
   }
 }
 
 function getTableName(name: string): string {
-  return [BACKEND_CONFIG.ENVIRONMENT, name].join('.');
+  return [GC_CONFIG.ENVIRONMENT, name].join('.');
 }
 
 function getLambda(context: Construct, name: string): lambda.Function {
   return new NodejsFunction(context, name, {
-    entry: path.join(__dirname, `../../apps/backend/src/handlers/${name}.ts`),
+    entry: path.join(__dirname, `../../backend/src/${name}.ts`),
     handler: 'handler',
     runtime: lambda.Runtime.NODEJS_22_X,
     memorySize: 256,
