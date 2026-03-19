@@ -1,0 +1,14 @@
+#root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  margin: 0px;
+  height: 100%;
+}
+
+#dom-root {
+  height: 100%;
+}
+

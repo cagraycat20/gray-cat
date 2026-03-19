@@ -5,6 +5,6 @@ import { WebUiStack } from '../stacks/web-ui/stack';
 
 const app = new cdk.App();
 
-new BackendStack(app, 'BackendStack');
+new BackendStack(app, 'gc-backend');
 
-new WebUiStack(app, 'WebUiStack');
+new WebUiStack(app, 'gc-web-ui');

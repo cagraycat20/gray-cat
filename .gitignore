@@ -5,3 +5,4 @@ coverage
 *.local
 .env
 apps/infra/cdk.out
+.vscode/tasks.json

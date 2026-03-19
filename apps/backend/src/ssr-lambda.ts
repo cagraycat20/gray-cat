@@ -1,33 +1,17 @@
 import { APIGatewayProxyEvent, APIGatewayProxyHandler } from 'aws-lambda';
 import * as React from 'react';
 import { pagePath as pp } from './constants';
-import { imageUpload } from './lib/image-upload';
 import { createHandler } from './lib/lambda-handler';
-import { pageUpload } from './lib/page-upload';
-import { s3 } from './lib/s3-client';
 import { loadProductListPageData, loadProductPageData } from './lib/ssr.utils';
-import { HttpError } from './lib/util';
 import { renderStaticPage } from './ssr';
-import {
-  GcDangerPage,
-} from './ssr/articles/gc-danger-page/gc-danger-page.view';
-import {
-  GcHowNotToGiveUpPage,
-} from './ssr/articles/gc-how-not-to-giveup-page/gc-how-not-to-giveup-page.view';
-import {
-  GcPointlessCalculationsPage,
-} from './ssr/articles/gc-pointless-calculations-page/gc-pointless-calculations-page.view';
-import {
-  GcRealStrategyPage,
-} from './ssr/articles/gc-real-strategy-page/gc-real-strategy-page.view';
-import {
-  GcConsumedProductsSummarySocialPage,
-} from './ssr/gc-consumed-products-summary-social-page/gc-consumed-products-summary-social-page.view';
+import { GcDangerPage } from './ssr/articles/gc-danger-page/gc-danger-page.view';
+import { GcHowNotToGiveUpPage } from './ssr/articles/gc-how-not-to-giveup-page/gc-how-not-to-giveup-page.view';
+import { GcPointlessCalculationsPage } from './ssr/articles/gc-pointless-calculations-page/gc-pointless-calculations-page.view';
+import { GcRealStrategyPage } from './ssr/articles/gc-real-strategy-page/gc-real-strategy-page.view';
 import { GcCookiePolicyPage, GcPrivacyPolicyPage, GcTermsOfUsePage } from './ssr/gc-docs';
 import { GcPageNotFound } from './ssr/gc-page-not-found/gc-page-not-found.view';
 import { GcProductListPage } from './ssr/gc-product-list-page/gc-product-list-page.view';
 import { GcProductPage } from './ssr/gc-product-page/gc-product-page.view';
-import { GcSocialPage } from './ssr/gc-social-page/gc-social-page.view';
 import { GcWelcome } from './ssr/gc-welcome-page/gc-welcome-page.view';
 import { ConsumedProductsSummarySocialPage, SocialPage } from './types';
 
@@ -42,52 +26,24 @@ const pages: Array<[string, React.ComponentType]> = [
   [pp.privacy, GcPrivacyPolicyPage],
 ];
 
-export const socialHandler = createHandler<SocialPage>({ required: true }, {
-  post: async ({body, userId}) => {
-    if (!body) {
-      throw new HttpError(400, 'Expected object');
-    }
-
-    let page = {...body};
-
-    page = {
-      ...page,
-      image: await imageUpload(s3, page.image, userId, false),
-    };
-
-    page = {
-      ...page,
-      pageUrl: await pageUpload(s3, renderStaticPage(GcSocialPage, {}, {page}), userId),
-    };
-
-    return page;
-  },
-});
-
-export const consumedProductsSummarySocialHandler = createHandler<ConsumedProductsSummarySocialPage>(
+export const socialHandler = createHandler<SocialPage>(
   { required: true },
   {
-    post: async ({body, userId}) => {
-      if (!body) {
-        throw new HttpError(400, 'Expected object');
-      }
-
-      let page = {...body};
-
-      page = {
-        ...page,
-        image: await imageUpload(s3, page.image, userId, false),
-      };
-
-      page = {
-        ...page,
-        pageUrl: await pageUpload(s3, renderStaticPage(GcConsumedProductsSummarySocialPage, {}, {page}), userId),
-      };
-
-      return page;
+    post: async () => {
+      return '';
     },
   },
 );
+
+export const consumedProductsSummarySocialHandler =
+  createHandler<ConsumedProductsSummarySocialPage>(
+    { required: true },
+    {
+      post: async () => {
+        return '';
+      },
+    },
+  );
 
 async function renderPage(path: string, event: APIGatewayProxyEvent): Promise<string> {
   const page = pages.find(([pagePath]) => pagePath === path);
@@ -139,18 +95,20 @@ export const ssrHandler: APIGatewayProxyHandler = async (event) => {
     if (proxyPath === '.well-known/assetlinks.json') {
       return {
         statusCode: 200,
-        body: JSON.stringify([{
-          relation: ['delegate_permission/common.handle_all_urls'],
-          target : {
-            namespace: 'android_app',
-            package_name: 'com.graycat.protomeal',
-            // tslint:disable-next-line: max-line-length
-            sha256_cert_fingerprints: [
-              '21:39:66:28:F2:65:B8:64:82:B7:DA:A1:1F:D4:2F:8E:28:D1:9C:A6:47:2C:21:E6:97:2E:7C:F0:81:AD:EE:06', // prod
-              'E7:0D:8C:B7:65:69:86:95:31:41:40:E6:97:2C:6A:42:D6:D1:BD:7E:F7:D5:C4:F7:B3:F3:33:1F:45:E7:23:B9', // test
-            ],
+        body: JSON.stringify([
+          {
+            relation: ['delegate_permission/common.handle_all_urls'],
+            target: {
+              namespace: 'android_app',
+              package_name: 'com.graycat.protomeal',
+              // tslint:disable-next-line: max-line-length
+              sha256_cert_fingerprints: [
+                '21:39:66:28:F2:65:B8:64:82:B7:DA:A1:1F:D4:2F:8E:28:D1:9C:A6:47:2C:21:E6:97:2E:7C:F0:81:AD:EE:06', // prod
+                'E7:0D:8C:B7:65:69:86:95:31:41:40:E6:97:2C:6A:42:D6:D1:BD:7E:F7:D5:C4:F7:B3:F3:33:1F:45:E7:23:B9', // test
+              ],
+            },
           },
-        }]),
+        ]),
         headers: {
           'Content-Type': 'application/json;charset=utf-8',
         },
@@ -167,12 +125,11 @@ export const ssrHandler: APIGatewayProxyHandler = async (event) => {
       };
     }
 
-    return  {
+    return {
       statusCode: 200,
       body: await renderPage(proxyPath, event),
       headers,
     };
-
   } catch (error) {
     let statusCode;
     let message;
@@ -181,7 +138,7 @@ export const ssrHandler: APIGatewayProxyHandler = async (event) => {
     if (typeof error === 'string') {
       message = error;
     } else {
-      ({message, stack, statusCode} = error);
+      ({ message, stack, statusCode } = error);
     }
 
     statusCode = statusCode || 500;

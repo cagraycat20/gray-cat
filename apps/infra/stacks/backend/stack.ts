@@ -5,8 +5,7 @@ import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
-import s3 from 'aws-cdk-lib/aws-s3';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 import * as path from 'path';
 import { GC_CONFIG } from 'stacks/shared/config';
@@ -20,6 +19,15 @@ enum ApiRoute {
 }
 
 export class BackendStack extends Stack {
+  private productTable: dynamodb.Table;
+  private daysTable: dynamodb.Table;
+  private usersTable: dynamodb.Table;
+  private systemTable: dynamodb.Table;
+
+  private mediaBucket: s3.Bucket;
+  private userContentBucket: s3.Bucket;
+  private assetsBucket: s3.Bucket;
+
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
@@ -28,31 +36,31 @@ export class BackendStack extends Stack {
 
     /* ----------------------- DynamoDB tables ----------------------- */
 
-    const productTable = new dynamodb.Table(this, 'ProductsTable', {
-      tableName: getTableName('products'),
+    this.productTable = new dynamodb.Table(this, 'ProductsTable', {
+      tableName: getTableName(GC_CONFIG.PRODUCTS_TABLE_NAME),
       partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'id', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy,
     });
 
-    const daysTable = new dynamodb.Table(this, 'DaysTable', {
-      tableName: getTableName('days'),
+    this.daysTable = new dynamodb.Table(this, 'DaysTable', {
+      tableName: getTableName(GC_CONFIG.DAYS_TABLE_NAME),
       partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'date', type: dynamodb.AttributeType.NUMBER },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy,
     });
 
-    const usersTable = new dynamodb.Table(this, 'UsersTable', {
-      tableName: getTableName('users'),
+    this.usersTable = new dynamodb.Table(this, 'UsersTable', {
+      tableName: getTableName(GC_CONFIG.USERS_TABLE_NAME),
       partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy,
     });
 
-    const systemTable = new dynamodb.Table(this, 'SystemTable', {
-      tableName: getTableName('system'),
+    this.systemTable = new dynamodb.Table(this, 'SystemTable', {
+      tableName: getTableName(GC_CONFIG.SYSTEM_TABLE_NAME),
       partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy,
@@ -60,18 +68,20 @@ export class BackendStack extends Stack {
 
     /* ----------------------- Buckets ----------------------- */
 
-    const mediaBucket = new s3.Bucket(this, 'MediaBucket', {
-      bucketName: GC_CONFIG.MEDIA_BUCKET_NAME,
+    const stackName = Stack.of(this).stackName;
+
+    this.mediaBucket = new s3.Bucket(this, 'MediaBucket', {
+      bucketName: this.getBucketName(GC_CONFIG.MEDIA_BUCKET_NAME),
       removalPolicy: RemovalPolicy.RETAIN,
     });
 
-    const userContentBucket = new s3.Bucket(this, 'UserContentS3Bucket', {
-      bucketName: GC_CONFIG.USER_CONTENT_BUCKET_NAME,
+    this.userContentBucket = new s3.Bucket(this, 'UserContentS3Bucket', {
+      bucketName: this.getBucketName(GC_CONFIG.USER_CONTENT_BUCKET_NAME),
       removalPolicy: RemovalPolicy.RETAIN,
     });
 
-    const assetsBucket = new s3.Bucket(this, 'assetsS3Bucket', {
-      bucketName: GC_CONFIG.ASSETS_BUCKET_NAME,
+    this.assetsBucket = new s3.Bucket(this, 'assetsS3Bucket', {
+      bucketName: this.getBucketName(GC_CONFIG.ASSETS_BUCKET_NAME),
       removalPolicy: RemovalPolicy.RETAIN,
     });
 
@@ -93,10 +103,10 @@ export class BackendStack extends Stack {
 
     /* ----------------------- Lambdas ----------------------- */
 
-    const userSettingsLambda = getLambda(this, 'user-settings-lambda');
-    const productsLambda = getLambda(this, 'products-lambda');
-    const imageSearchLambda = getLambda(this, 'image-search-lambda');
-    const daysLambda = getLambda(this, 'days-lambda');
+    const userSettingsLambda = this.getLambda('user-settings-lambda');
+    const productsLambda = this.getLambda('products-lambda');
+    const imageSearchLambda = this.getLambda('image-search-lambda');
+    const daysLambda = this.getLambda('days-lambda');
 
     /* ----------------------- HTTP API + Auth ----------------------- */
 
@@ -160,25 +170,47 @@ export class BackendStack extends Stack {
     new CfnOutput(this, 'UserPoolId', { value: userPool.userPoolId });
     new CfnOutput(this, 'UserPoolClientId', { value: userPoolClient.userPoolClientId });
   }
+
+  private getLambda(name: string): lambda.Function {
+    const fullLambdaName = getFullLambdaName(Stack.of(this).stackName, name);
+
+    return new lambda.Function(this, name, {
+      functionName: fullLambdaName,
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: `${name}.handler`,
+      code: lambda.Code.fromAsset(getPathToLambda(name)),
+      memorySize: 256,
+      timeout: Duration.seconds(30),
+      environment: {
+        USERS_TABLE: this.usersTable.tableName,
+        DAYS_TABLE: this.daysTable.tableName,
+        PRODUCTS_TABLE: this.productTable.tableName,
+        SYSTEM_TABLE: this.systemTable.tableName,
+        MEDIA_BUCKET: this.mediaBucket.bucketName,
+      },
+    });
+  }
+
+  private getBucketName(name: string): string {
+    return [Stack.of(this).stackName, GC_CONFIG.ENVIRONMENT, name].join('.');
+  }
 }
 
 function getTableName(name: string): string {
   return [GC_CONFIG.ENVIRONMENT, name].join('.');
 }
 
-function getLambda(context: Construct, name: string): lambda.Function {
-  return new NodejsFunction(context, name, {
-    entry: path.join(__dirname, `../../backend/src/${name}.ts`),
-    handler: 'handler',
-    runtime: lambda.Runtime.NODEJS_22_X,
-    memorySize: 256,
-    timeout: Duration.seconds(30),
-    bundling: {
-      minify: true,
-      sourceMap: true,
-      target: 'es2022',
-      externalModules: ['aws-sdk'],
-    },
-    environment: {},
-  });
+const MAX_LAMBDA_NAME_SIZE = 64;
+
+function getFullLambdaName(stackName: string, lambdaName: string): string {
+  return [stackName, lambdaName.replace('lambda-', '')]
+    .join('-') // we want to properly separate stack name
+    .split('-') // now all words are separated with "-"
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join('')
+    .slice(0, MAX_LAMBDA_NAME_SIZE - 1);
+}
+
+function getPathToLambda(name: string): string {
+  return path.join(__dirname, `../../../backend/build/${name}`);
 }

@@ -3,14 +3,14 @@ import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
-import { WEB_UI_CONFIG } from './config';
+import { GC_CONFIG } from 'stacks/shared/config';
 
 export class WebUiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
     const siteBucket = new s3.Bucket(this, 'WebSiteBucket', {
-      bucketName: WEB_UI_CONFIG.DOMAIN_NAME,
+      bucketName: GC_CONFIG.DOMAIN_NAME,
       websiteIndexDocument: 'index.html',
       websiteErrorDocument: '404.html',
       publicReadAccess: true,
@@ -25,10 +25,10 @@ export class WebUiStack extends cdk.Stack {
     });
 
     new s3.Bucket(this, 'S3BucketForWwwRedirection', {
-      bucketName: `www.${WEB_UI_CONFIG.DOMAIN_NAME}`,
+      bucketName: `www.${GC_CONFIG.DOMAIN_NAME}`,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       websiteRedirect: {
-        hostName: WEB_UI_CONFIG.DOMAIN_NAME,
+        hostName: GC_CONFIG.DOMAIN_NAME,
       },
     });
 

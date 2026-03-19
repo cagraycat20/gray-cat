@@ -1,14 +1,14 @@
-import { DayInfo, Feedback, LogEvent, Product, RemoteSettings, User, UsiUnion } from '../../../web-ui/src/shared/types';
-export * from '../../../web-ui/src/shared/types';
+import { DayInfo, Feedback, Product, User } from '../../../web-ui/src/shared/types';
 export { ExtTheme, WithStylesAndTheme } from '../../../web-ui/src/shared/theme';
+export * from '../../../web-ui/src/shared/types';
 
-export type Diff<T extends string, U extends string> =
-  ({ [P in T]: P } & { [P in U]: never } & { [x: string]: never })[T];
+export type Diff<T extends string, U extends string> = ({ [P in T]: P } & { [P in U]: never } & {
+  [x: string]: never;
+})[T];
 // @ts-ignore
 export type Omit<T, K extends keyof T> = Pick<T, Diff<keyof T, K>>;
 
-export interface DBUser extends User {
-}
+export interface DBUser extends User {}
 
 export interface DBDayInfo extends Omit<DayInfo, 'date'> {
   date: number;
@@ -26,12 +26,7 @@ export interface DBSystemItem<T> {
   value: T;
 }
 
-export interface DBFeedback extends Feedback {
-}
-
-export interface DBLogEvent extends LogEvent {
-  expirationDate: number;
-}
+export interface DBFeedback extends Feedback {}
 
 export interface ProductPageData {
   product: Product;

@@ -1,0 +1,3 @@
+export const DND_IDENTIFIERS = {
+  PRODUCT_CARD: 'PRODUCT_CARD',
+};
