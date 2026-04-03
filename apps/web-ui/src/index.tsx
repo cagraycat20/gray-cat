@@ -3,10 +3,8 @@ import * as React from 'react';
 import * as ReactDOM from 'react-dom';
 import { GcApp } from './components';
 import { applyTheme } from './shared/theme';
-import { initGoogleAnalytics, NetworkStatusHandler } from './utils';
+import { NetworkStatusHandler } from './utils';
 import * as serviceWorker from './utils/serviceWorker';
-
-initGoogleAnalytics();
 
 const ThemedApp = applyTheme(GcApp);
 export const nsHandler = new NetworkStatusHandler();
@@ -15,12 +13,10 @@ export const nsHandler = new NetworkStatusHandler();
 console.log(process.env.REACT_APP_VERSION);
 
 ReactDOM.render(
-  (
   <>
     <CssBaseline />
     <ThemedApp />
-  </>
-  ),
+  </>,
   document.getElementById('root') as HTMLElement,
 );
 
